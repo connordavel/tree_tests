@@ -1,0 +1,29 @@
+HW3: scene  
+
+Connor Davel
+CSCI4229 2022
+
+
+Demonstrates how to draw a scene
+
+
+Key bindings
+  arrows     Change view angle
+  0          Reset view angle
+  9          Reset position
+  o/l        increase/decrease z position
+  r/f/d/g    change x and y view position
+  ESC        Exit
+Tree types:
+  There are 2 type of trees with various parameters that 
+  are copied, rotated, and generally changed throughout 
+  the scene. The rotation and size of the branches/leaves
+  is varied randomly as well as the size. 
+
+Sources:
+No outside sources used. All code is from in-class examples,
+especially example 8 for things like window resizing, drawing lines/axes,
+drawing a sphere, etc. 
+
+Time to Complete:
+about 6 hours
