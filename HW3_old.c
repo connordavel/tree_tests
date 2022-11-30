@@ -1,58 +1,62 @@
 /*
- *  HW 6
+ *  HW 3
  *  Author: Connor Davel
- *  Date: 10/5/2022
- *  Sources: Lots of code is used from examples 1-8 and example 13 with calls to the opengl lighting functions
+ *  Date: 9/22/2022
+ *  Sources: Lots of code is used from examples 1-8
  */
-#include "CSCIx229.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <math.h>
+#ifdef USEGLEW
+#include <GL/glew.h>
+#endif
 
-void reshape(int, int);
+#define GL_GLEXT_PROTOTYPES
+#ifdef __APPLE__
+#include <GLUT/glut.h>
+// Tell Xcode IDE to not gripe about OpenGL deprecation
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#else
+#include <GL/glut.h>
+#endif
+//  Default resolution
+//  For Retina displays compile with -DRES=2
+#ifndef RES
+#define RES 1
+#endif
 
 int th=0;     // view angles used in class
 int ph=0;
-double l_x = 0;
-double l_y = 1;
-double l_z = 0;
 double g_x = 0;
+double g_y = 0;
 double g_z = 0;
-int window_width = 600;
-int window_height = 600;
-unsigned int wood_texture;
-unsigned int leaves_texture;
-unsigned int ground_texture;
-int sky; 
-#define N 50
+
+double fp_x = 0;
+double fp_y = 0;
+double fp_z = 0;
+
+#define N 1000
 #define O 10
 
-int mode = 3;
-int emission  =   0;
-float shiny   =   1;
+//  Cosine and Sine in degrees
+#define Cos(x) (cos((x)*3.14159265/180))
+#define Sin(x) (sin((x)*3.14159265/180))
 
-typedef struct
+#define LEN 8192  //  Maximum length of text string
+void Print(const char* format , ...)
 {
-   double p[3];
-   double v[3];
-   double a[3];
-   double mass;  
-   double s; 
-}Boid; 
-
-typedef struct 
-{
-   double x;
-   double y; 
-   double z; 
-   double ux;
-   double uy; 
-   double uz; 
-   double r; 
-   int type; // 1 = sphere, 2 = cyliner, 3 = sky plane
-}CollisionObject;
-
-void sphere_collision_function(double *x, double *y, double *z, double *r); 
-
-CollisionObject collision_objects[O]; 
-Boid boids[N]; 
+   char    buf[LEN];
+   char*   ch=buf;
+   va_list args;
+   //  Turn the parameters into a character string
+   va_start(args,format);
+   vsnprintf(buf,LEN,format,args);
+   va_end(args);
+   //  Display the characters one at a time at the current raster position
+   while (*ch)
+      glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18,*ch++);
+}
 
 /*
  *  Check for OpenGL errors
@@ -75,31 +79,35 @@ void Fatal(const char* format , ...)
    exit(1);
 }
 
-#define LEN 8192  //  Maximum length of text string
-void Print(const char* format , ...)
+typedef struct
 {
-   char    buf[LEN];
-   char*   ch=buf;
-   va_list args;
-   //  Turn the parameters into a character string
-   va_start(args,format);
-   vsnprintf(buf,LEN,format,args);
-   va_end(args);
-   //  Display the characters one at a time at the current raster position
-   while (*ch)
-      glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18,*ch++);
-}
+   double p[3];
+   double v[3];
+   double a[3];
+   double mass;  
+}Boid; 
+
+typedef struct 
+{
+   double x;
+   double y; 
+   double z; 
+   double ux;
+   double uy; 
+   double uz; 
+   double r; 
+   int type; // 1 = sphere, 2 = cyliner, 3 = sky plane
+}CollisionObject;
+
+void sphere_collision_function(double *x, double *y, double *z, double *r); 
+
+CollisionObject collision_objects[O]; 
+Boid boids[N]; 
 
 static void Vertex(double th,double ph, double r, double g, double b)
 {
-   double x = Sin(th)*Cos(ph);
-   double z = Cos(th)*Cos(ph);
-   double y =         Sin(ph);
-
-   glNormal3d(x,y,z);
-   glTexCoord2f((ph+90)/180,fmod(th/90, 1)); 
-   glVertex3d(x, y ,z); //polar -> cartesian coordinates
-   
+   glColor3f(r,g,b);
+   glVertex3d(Sin(th)*Cos(ph) , Sin(ph) , Cos(th)*Cos(ph)); //polar -> cartesian coordinates
 }
 
 void sphere(double x, double y, double z, double x_scale, double y_scale, double z_scale, int rot) {
@@ -107,11 +115,6 @@ void sphere(double x, double y, double z, double x_scale, double y_scale, double
    double r = 0;
    double g = 1; 
    double b = 0;
-   glEnable(GL_TEXTURE_2D);
-   glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_MODULATE);
-   glColor3f(1,1,1);
-   glBindTexture(GL_TEXTURE_2D,leaves_texture);
-
    glPushMatrix();
    //  Offset and scale
    glTranslated(x,y,z);
@@ -146,7 +149,7 @@ void sphere(double x, double y, double z, double x_scale, double y_scale, double
       Vertex(th,90-rot, r,g,b);
    }
    glEnd();
-   glDisable(GL_TEXTURE_2D);
+
    //  Undo transformations
    glPopMatrix();
 }
@@ -198,120 +201,24 @@ void cyl(double x, double y, double z, double dx, double dy, double dz, double r
 
    glTranslated(x,y,z);
    glMultMatrixd(mat);
-   glEnable(GL_TEXTURE_2D);
-   glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_MODULATE);
-   glColor3f(1,1,1);
-   glBindTexture(GL_TEXTURE_2D, wood_texture);
+   glColor3f(0.588, 0.294, 0);
    glBegin(GL_QUAD_STRIP);
-   for (int th=0;th<=360;th+=45)
+   for (int th=0;th<=360;th+=60)
    {
-      glNormal3f(0, Cos(th), Sin(th));
-      glTexCoord2f(th/360.,0); glVertex3d(length,r2*Cos(th),r2*Sin(th));
-      glTexCoord2f(th/360.,1); glVertex3d(0,r1*Cos(th),r1*Sin(th));
+      glVertex3d(length,r2*Cos(th),r2*Sin(th));
+      glVertex3d(0,r1*Cos(th),r1*Sin(th));
    }
    glEnd();
    glBegin(GL_TRIANGLE_FAN);
-   glNormal3d(1,0,0);
    glVertex3d(length, 0.0, 0.0);
-   for (int th=0;th<=360;th+=45)
+   for (int th=0;th<=360;th+=60)
       glVertex3d(length,r2*Cos(th),r2*Sin(th));
    glEnd();
-   glDisable(GL_TEXTURE_2D);
    // cylinders do not need another end cap, since 
    // all should originate from inside the trunk of the tree
 
    glPopMatrix();
 }
-
-void cone(double x, double y, double z, double h, double r, int rot, int overall_rot) {
-   //  Save transformation
-   glPushMatrix();
-   glEnable(GL_TEXTURE_2D);
-   glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_MODULATE);
-   glColor3f(1,1,1);
-   glBindTexture(GL_TEXTURE_2D,leaves_texture);
-   //  Offset and scale
-   glTranslated(x,y,z);
-   glRotatef(overall_rot,0,1,0);
-   glScalef(2*r, h, 2*r);
-   glBegin(GL_TRIANGLE_STRIP);
-    
-   for (int th=0;th<=360;th+=rot)
-   {  
-      glNormal3d(Cos(th),0.2,Sin(th));
-      glTexCoord2f(0.5,0.5); glVertex3d(0,1,0);
-      glTexCoord2f(0.5+0.5*Cos(th), 0.5+0.5*Sin(th)); glVertex3d(0.5*Cos(th),0,0.5*Sin(th));
-   }
-   glEnd();
-   glBegin(GL_TRIANGLE_FAN);
-   glNormal3d(0,-1,0);
-   glTexCoord2f(0.5,0.5);
-   glVertex3d(0,0,0);
-   for (int th=0;th<=360;th+=rot)
-   {
-      glTexCoord2f(0.5+0.5*Cos(th), 0.5+0.5*Sin(th));
-      glVertex3d(0.5*Cos(th),0,0.5*Sin(th));
-   }
-   glEnd();
-   glDisable(GL_TEXTURE_2D);
-   //  Undo transformations
-   glPopMatrix();
-}
-
-void trunk_seg(double wid, double wid2, double start_h, double end_h, double tot_h) {
-   // float white[] = {1,1,1,1};
-   // float Emission[]  = {0.0,0.0,0.01*emission,1.0};
-   // glMaterialf(GL_FRONT_AND_BACK,GL_SHININESS,shiny);
-   // glMaterialfv(GL_FRONT_AND_BACK,GL_SPECULAR,white);
-   // glMaterialfv(GL_FRONT_AND_BACK,GL_EMISSION,Emission);
-
-   glEnable(GL_TEXTURE_2D);
-   glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_MODULATE);
-   glColor3f(1,1,1);
-   glBindTexture(GL_TEXTURE_2D, wood_texture);
-   glBegin(GL_QUAD_STRIP);
-   for (int th=0;th<=360;th+=30)
-   {
-      glNormal3f(Cos(th), wid2-wid,Sin(th));
-      glTexCoord2f(th/360.,(start_h/tot_h)); glVertex3d(wid*Cos(th),start_h,wid*Sin(th));
-      glTexCoord2f((th)/360.,(end_h/tot_h)); glVertex3d(wid2*Cos(th),end_h,wid2*Sin(th));
-   }
-   glEnd();
-   glDisable(GL_TEXTURE_2D);
-}
-
-void tree1_simple(double x, double y, double z, int branch_rot, int overall_rot, double scale){
-   glPushMatrix();
-   glTranslated(x,y,z);
-   glTranslated(0,1.4,0);
-   glRotatef(overall_rot, 0,1,0);
-   glScaled(scale,scale,scale);
-   for (int i = 0; i<=10;i++){
-      int scale = branch_rot * i;
-      double y_offset = i / 10.0;
-      glRotatef(scale,0,1,0);
-      cyl(0,y_offset,0, 0,1+y_offset,1 , 0.1, 0.1);
-      sphere(0,1+y_offset,1, 1,.4,1, 45);
-   }
-   glPopMatrix();
-
-   double total_h = 2.5;
-   glPushMatrix();
-   glTranslated(x,y,z);
-   double wid = 0.5;
-   double wid2 = 0.3;
-   trunk_seg(wid, wid2, 0, 0.2, total_h); 
-   wid = wid2;
-   wid2 = 0.2;
-   trunk_seg(wid, wid2, 0.2, 0.6, total_h); 
-   wid = wid2;
-   wid2 = 0.15;
-   trunk_seg(wid, wid2, 0.6, 2.5, total_h); 
-   sphere(0,2.5,0, 1,.4,1, 45);
-
-   glPopMatrix();
-}
-
 void leaf(double x, double y, double z, double dx, double dy, double dz, double ux, double uy, double uz, double s) {
    // double sx = dx - x;
    // double sy = dy - y;
@@ -443,6 +350,33 @@ void branch(double x, double y, double z, double dx, double dy, double dz, doubl
    glPopMatrix();
 }
 
+void cone(double x, double y, double z, double h, double r, int rot, int overall_rot) {
+   //  Save transformation
+   glPushMatrix();
+
+   glColor3f(0,1,0);
+   //  Offset and scale
+   glTranslated(x,y,z);
+   glRotatef(overall_rot,0,1,0);
+   glBegin(GL_TRIANGLE_FAN);
+   glVertex3d(0,h,0);
+   for (int th=0;th<=360;th+=rot)
+   {
+      glVertex3d(r*Cos(th),0,r*Sin(th));
+   }
+   glEnd();
+   glBegin(GL_TRIANGLE_FAN);
+   glVertex3d(0,0,0);
+   for (int th=0;th<=360;th+=rot)
+   {
+      glVertex3d(r*Cos(th),0,r*Sin(th));
+   }
+   glEnd();
+
+   //  Undo transformations
+   glPopMatrix();
+}
+
 void branches(double x, double y, double z, double dx, double dy, double dz, int stop, int current, double angle_factor) {
    // double sx = dx - x;
    // double sy = dy - y;
@@ -523,16 +457,63 @@ void branches(double x, double y, double z, double dx, double dy, double dz, int
    glPopMatrix();
 }
 
+void trunk_seg(double wid, double wid2, double h1, double h2) {
+   glColor3f(0.588, 0.294, 0);
+   glBegin(GL_QUAD_STRIP);
+   for (int th=0;th<=360;th+=30)
+   {
+      glVertex3d(wid*Cos(th),h1,wid*Sin(th));
+      glVertex3d(wid2*Cos(th),h2,wid2*Sin(th));
+   }
+   glEnd();
+}
+
+void tree1_simple(double x, double y, double z, int branch_rot, int overall_rot, double scale){
+   glPushMatrix();
+   glTranslated(x,y,z);
+   glTranslated(0,1.4,0);
+   glRotatef(overall_rot, 0,1,0);
+   glScaled(scale,scale,scale);
+   for (int i = 0; i<=10;i++){
+      int scale = branch_rot * i;
+      double y_offset = i / 10.0;
+      glRotatef(scale,0,1,0);
+      cyl(0,y_offset,0, 0,1+y_offset,1 , 0.1, 0.1);
+      sphere(0,1+y_offset,1, 1,.4,1, 45);
+   }
+   glPopMatrix();
+
+   glPushMatrix();
+   glTranslated(x,y,z);
+   double wid = 0.5;
+   double wid2 = 0.3;
+   double height = 0.2;
+   trunk_seg(wid, wid2, 0, height); 
+   glTranslated(0,height,0);
+   wid = wid2;
+   wid2 = 0.2;
+   height = 0.4;
+   trunk_seg(wid, wid2, 0, height); 
+   glTranslated(0,height,0);
+   wid = wid2;
+   wid2 = 0.15;
+   height = 1.9;
+   trunk_seg(wid, wid2, 0, height); 
+   sphere(0,height,0, 1,.4,1, 45);
+
+   glPopMatrix();
+}
+
 void tree1(double x, double y, double z, int branch_rot, int overall_rot, double scale){
    glPushMatrix();
    glTranslated(x,y,z);
-   glTranslated(0,scale/3,0);
+   glTranslated(0,1.4,0);
    glRotatef(overall_rot, 0,1,0);
    glScaled(scale,scale,scale);
    for (int i = 0; i<=5;i++){
-      int rot_scale = branch_rot * i;
-      double y_offset = scale/20 + i/(5*scale);
-      glRotatef(rot_scale,0,1,0);
+      int scale = branch_rot * i;
+      double y_offset = 0.15+i / 5.0;
+      glRotatef(scale,0,1,0);
       branches(0,y_offset,0, 0,1+y_offset,1, 5-(i/2), 1, 2);
       // cyl(0,y_offset,0, 0,1+y_offset,1 , 0.1, 0.1);
       // sphere(0,1+y_offset,1, 1,.4,1, 45);
@@ -544,20 +525,30 @@ void tree1(double x, double y, double z, int branch_rot, int overall_rot, double
    glScaled(scale,scale,scale);
    double wid = 0.3;
    double wid2 = 0.15;
-   trunk_seg(wid, wid2, 0, 0.2, 2.5); 
+   trunk_seg(wid, wid2, 0, 0.2); 
 
    wid = wid2;
    wid2 = 0.1;
-   trunk_seg(wid, wid2, 0.2, 0.6, 2.5); 
+   trunk_seg(wid, wid2, 0.2, 0.6); 
 
    wid = wid2;
    wid2 = 0.02;
-   trunk_seg(wid, wid2, 0.6, 2.5, 2.5);
+   trunk_seg(wid, wid2, 0.6, 2.5);
 
    glPopMatrix();
 }
 
-void tree2(double x, double y, double z, int overall_rot, double r, double scale){
+void bush(double x, double y, double z, int branch_rot, int overall_rot, double scale){
+   glPushMatrix();
+   glTranslated(x,y,z);
+   glTranslated(0,0,0);
+   glRotatef(overall_rot, 0,1,0);
+   glScaled(scale,scale,scale);
+   branches(0,0,0, 0,1,0, 4, 0.2, 0.5);
+   glPopMatrix();
+}
+
+void tree2_simple(double x, double y, double z, int overall_rot, double r, double scale){
    // cone(0,1,0, 1, 0.5, 60, 11);
    glPushMatrix();
    glTranslated(x,y,z);
@@ -575,52 +566,128 @@ void tree2(double x, double y, double z, int overall_rot, double r, double scale
    }
    glPopMatrix();
 
-   double total_h = 2.5;
    glPushMatrix();
    glTranslated(x,y,z);
+   glScaled(scale,scale,scale);
    double wid = 0.35;
    double wid2 = 0.15;
-   trunk_seg(wid, wid2, 0, 0.2, total_h); 
+   double height = 0.2;
+   trunk_seg(wid, wid2, 0, height); 
+   glTranslated(0,height,0);
    wid = wid2;
    wid2 = 0.1;
-   trunk_seg(wid, wid2, 0.2, 0.6, total_h); 
+   height = 0.4;
+   trunk_seg(wid, wid2, 0, height); 
+   glTranslated(0,height,0);
    wid = wid2;
    wid2 = 0.08;
-   trunk_seg(wid, wid2, 0.6, 2.5, total_h); 
+   height = 1.9;
+   trunk_seg(wid, wid2, 0, height); 
 
    glPopMatrix();
 }
 
-/*
- *  Draw a ball
- *     at (x,y,z)
- *     radius (r)
- */
-static void light_ball(double x,double y,double z,double r)
-{
-   //  Save transformation
+void fence_plank(double x1, double y1, double z1, double x2, double y2, double z2, double s) {
+   double dx = x2-x1;
+   double dy = y2-y1; 
+   double dz = z2-z1; 
+   // double sx = dx - x1;
+   // double sy = dy - y1;
+   // double sz = dz - z1; 
+   // double length = sqrt(sx*sx + sy*sy + sz*sz);
+   double length = sqrt(dx*dx + dy*dy + dz*dz);
+   //  Unit vector in direction of flght
+   double D0 = sqrt(dx*dx+dy*dy+dz*dz);
+   double X0 = dx/D0;
+   double Y0 = dy/D0;
+   double Z0 = dz/D0;
+   //  Unit vector in "up" direction
+   // 0 = ux*dx + uy*dy + uz*dz
+   // ux = 0
+   // uy = 1
+   // 0 = dy + uz*dz
+   // uz = -dy/dz 
+   double ux;
+   double uy;
+   double uz; 
+   uz = 0;
+   ux = 0;
+   uy = 1; 
+
+   double D1 = sqrt(ux*ux+uy*uy+uz*uz);
+   double X1 = ux/D1;
+   double Y1 = uy/D1;
+   double Z1 = uz/D1;
+   //  Cross product gives the third vector
+   double X2 = Y0*Z1-Y1*Z0;
+   double Y2 = Z0*X1-Z1*X0;
+   double Z2 = X0*Y1-X1*Y0;
+
+   double mat[16];
+   mat[0] = X0;   mat[4] = X1;   mat[ 8] = X2;   mat[12] = 0;
+   mat[1] = Y0;   mat[5] = Y1;   mat[ 9] = Y2;   mat[13] = 0;
+   mat[2] = Z0;   mat[6] = Z1;   mat[10] = Z2;   mat[14] = 0;
+   mat[3] =  0;   mat[7] =  0;   mat[11] =  0;   mat[15] = 1;
    glPushMatrix();
-   //  Offset, scale and rotate
-   glTranslated(x,y,z);
-   glScaled(r,r,r);
-   //  White ball with yellow specular
-   glColor3f(0,1,0);
-   //  Bands of latitude
-   int inc = 10;
-   for (int ph=-90;ph<90;ph+=inc)
+
+   glTranslated(x1,y1,z1);
+   glMultMatrixd(mat);
+   glScaled(1,s,s);
+   glColor3f(0.588, 0.294, 0);
+   glBegin(GL_QUAD_STRIP);
+   for (int th=45;th<=405;th+=90)
    {
-      glBegin(GL_QUAD_STRIP);
-      for (int th=0;th<=360;th+=2*inc)
-      {
-         Vertex(th,ph,1,1,1);
-         Vertex(th,ph+inc,1,1,1);
-      }
-      glEnd();
+      glVertex3d(length,0.5*Cos(th),0.1*Sin(th));
+      glVertex3d(0,0.5*Cos(th),0.1*Sin(th));
    }
-   //  Undo transofrmations
+   glEnd();
+   glBegin(GL_TRIANGLE_FAN);
+   glVertex3d(length, 0.0, 0.0);
+   for (int th=45;th<=405;th+=90)
+      glVertex3d(length,0.5*Cos(th),0.1*Sin(th));
+   glEnd();
+    glBegin(GL_TRIANGLE_FAN);
+   glVertex3d(0, 0.0, 0.0);
+   for (int th=45;th<=405;th+=90)
+      glVertex3d(0,0.5*Cos(th),0.1*Sin(th));
+   glEnd();
+   // cylinders do not need another end cap, since 
+   // all should originate from inside the trunk of the tree
+
    glPopMatrix();
 }
 
+void fence_post(double x, double y, double z, double s) {
+   
+   //  Save transformation
+   glPushMatrix(); 
+   glColor3f(0.588, 0.294, 0);
+   glTranslated(x,y,z); 
+   glBegin(GL_QUAD_STRIP);
+   for (int th=45;th<=405;th+=90)
+   {
+      glVertex3d(0.5*Cos(th),0,0.5*Sin(th));
+      glVertex3d(0.5*Cos(th),s,0.5*Sin(th));
+   }
+   glEnd();
+   glBegin(GL_TRIANGLE_FAN);
+   glVertex3d(0.0, s,0.0);
+   for (int th=45;th<=405;th+=90)
+      glVertex3d(0.5*Cos(th),s,0.5*Sin(th));
+   glEnd();
+   glPopMatrix(); 
+
+   // chain fence post from previous 
+   if (!(fp_x == 0 && fp_y == 0 && fp_z == 0)) {
+      fence_plank(fp_x, fp_y+(10*s/27), fp_z, x,y+(10*s/27),z, 1);
+      fence_plank(fp_x, fp_y+(19*s/27), fp_z, x,y+(19*s/27),z, 1);
+   }
+   fp_x = x;
+   fp_y = y;
+   fp_z = z; 
+   
+
+}
 
 double dot(double x1, double y1, double z1, double x2, double y2, double z2) {
    return x1*x2 + y1*y2 + z1*z2;
@@ -635,7 +702,7 @@ void init_boids() {
       double y = rand()/(0.5*RAND_MAX)-1;
       double z = rand()/(0.5*RAND_MAX)-1; 
       double d = 5;
-      Boid temp = {{d*x,5+d*abs(y),d*z}, {0,0,0}, {0,0,0}, 1, fmod((i/100.), 0.1)};
+      Boid temp = {{d*x,5+d*abs(y),d*z}, {0,0,0}, {0,0,0}, 1};
       boids[i] = temp; 
    }
    CollisionObject tree = {0,0,0, 0,0,0, 5, 0}; 
@@ -644,7 +711,7 @@ void init_boids() {
 void update() {
    double sight_radius = 3; 
    double avoid_radius = 0.7;
-   double dt = 0.05;
+   double dt = 0.1;
    #pragma omp parallel for
    for (int k=0;k<N;k++) {
       // for a single boid k:
@@ -774,7 +841,7 @@ void update() {
             }
          }
       }
-      double bounding_box[6] = {-10, 10, 5, 15, -10, 10};
+      double bounding_box[6] = {-10, 10, -10, 10, -10, 10};
       if (cx < bounding_box[0]) {
          Fx += 1;
       }
@@ -812,7 +879,6 @@ void update() {
       current.p[0] = cx + dt*cvx;
       current.p[1] = cy + dt*cvy;
       current.p[2] = cz + dt*cvz;
-      current.s = fmod((current.s+0.002), 0.1);
       boids[k] = current; 
    }
 }
@@ -824,69 +890,17 @@ void render_boids() {
       double x = temp.p[0];
       double y = temp.p[1];
       double z = temp.p[2];
-      double size = fabs(temp.s-0.05);
-      light_ball(x,y,z, size); 
+      sphere(x,y,z, 0.1, 0.1, 0.1, 90); 
       
       // fence_post(x,y,z, 0.4); 
       
    }
    // glEnd();
 }
-
-/* 
- *  Draw sky box
- */
-static void Sky(double x, double y, double z, double D)
-{
-   //  Textured white box dimension (-D,+D)
-   glPushMatrix();
-   glTranslated(x,y,z); 
-   glScaled(D,D,D);
-   glEnable(GL_TEXTURE_2D);
-   glColor3f(1,1,1);
-
-   //  Sides
-   glBindTexture(GL_TEXTURE_2D,sky);
-   glBegin(GL_QUADS);
-   glTexCoord2f(0,0.34); glVertex3f(-1,-1,-1);
-   glTexCoord2f(0.25,0.34); glVertex3f(+1,-1,-1);
-   glTexCoord2f(0.25,0.66); glVertex3f(+1,+1,-1);
-   glTexCoord2f(0,0.66); glVertex3f(-1,+1,-1);
-
-   glTexCoord2f(0.25,0.34); glVertex3f(+1,-1,-1);
-   glTexCoord2f(0.50,0.34); glVertex3f(+1,-1,+1);
-   glTexCoord2f(0.50,0.66); glVertex3f(+1,+1,+1);
-   glTexCoord2f(0.25,0.66); glVertex3f(+1,+1,-1);
-
-   glTexCoord2f(0.50,0.34); glVertex3f(+1,-1,+1);
-   glTexCoord2f(0.75,0.34); glVertex3f(-1,-1,+1);
-   glTexCoord2f(0.75,0.66); glVertex3f(-1,+1,+1);
-   glTexCoord2f(0.50,0.66); glVertex3f(+1,+1,+1);
-
-   glTexCoord2f(0.75,0.34); glVertex3f(-1,-1,+1);
-   glTexCoord2f(1.00,0.34); glVertex3f(-1,-1,-1);
-   glTexCoord2f(1.00,0.66); glVertex3f(-1,+1,-1);
-   glTexCoord2f(0.75,0.66); glVertex3f(-1,+1,+1);
-   glEnd();
-
-   //  Top and bottom
-   glBindTexture(GL_TEXTURE_2D,sky);
-   glBegin(GL_QUADS);
-   glTexCoord2f(0.25,0.66); glVertex3f(+1,+1,-1);
-   glTexCoord2f(0.5,0.66); glVertex3f(+1,+1,+1);
-   glTexCoord2f(0.5,1.0); glVertex3f(-1,+1,+1);
-   glTexCoord2f(0.25,1.0); glVertex3f(-1,+1,-1);
-
-   glEnd();
-
-   //  Undo
-   glDisable(GL_TEXTURE_2D);
-   glPopMatrix();
-}
-
 /*
  *  OpenGL (GLUT) calls this routine to display the scene
  */
+
 void display()
 {
    //  Erase the window and the depth buffer
@@ -896,140 +910,48 @@ void display()
    //  Undo previous transformations
    glLoadIdentity();
    //  Set view angle
-   if (mode == 3) {
-      gluLookAt(g_x,0.5,g_z, g_x+Cos(th),0.5+Sin(ph),g_z+Sin(th), 0,1,0);
-   }
-   else {
-      glRotatef(ph,1,0,0);
-      glRotatef(th,0,1,0);
-   }
-   
+   glRotatef(ph,1,0,0);
+   glRotatef(th,0,1,0);
+   glTranslated(g_x,g_y,g_z);
 
-   int ambient   =  3;
-   int diffuse   =  50;
-   int specular  =   0; 
-   int local     =   0;
-   float Position[4];
+   update(); 
+   render_boids();
 
-   //  Translate intensity to color vectors
-   float Ambient[]   = {0.01*ambient ,0.01*ambient ,0.01*ambient ,1.0};
-   float Diffuse[]   = {0.01*diffuse ,0.01*diffuse ,0.01*diffuse ,1.0};
-   float Specular[]  = {0.01*specular,0.01*specular,0.01*specular,1.0};
-   //  Light position
-   if (mode == 3)
-   {
-      Position[0] = g_x + Cos(th);
-      Position[1] = 0.4 + Sin(ph);
-      Position[2] = g_z + Sin(th);
-      Position[3] = 1.0;
-   }
-   else
-   {
-      Position[0] = l_x;
-      Position[1] = l_y;
-      Position[2] = l_z;
-      Position[3] = 1.0;
-      //  Draw light position as ball (still no lighting here)
-      
-   }
-   
-   //  OpenGL should normalize normal vectors
-   glEnable(GL_NORMALIZE);
+   // tree1(0,0,0,55, 0, 6);
+   // bush(0,0,0,60, 0, 6);
+   // tree2(-1.9,0,3, 0, 0.9, 1);
+   // branch(0,0,0, -1,-1,-1, 1,0.8);
+   // fence_plank(0,0,0, 1,0.5,5, 1);
+   // fence_post(1,0,0, 3); 
+   // fence_post(4,0,0, 3); 
+   // fence_post(4,0,4, 3); 
+   // fence_post(0,0,4, 3); 
+   // fence_post(8,0,4, 3); 
 
-   glEnable(GL_LIGHTING);
 
-   glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER,local);
-   glColorMaterial(GL_FRONT_AND_BACK,GL_AMBIENT_AND_DIFFUSE);
-   glEnable(GL_COLOR_MATERIAL);
-
-   glEnable(GL_LIGHT0);
-   glLightfv(GL_LIGHT0,GL_AMBIENT ,Ambient);
-   glLightfv(GL_LIGHT0,GL_DIFFUSE ,Diffuse);
-   glLightfv(GL_LIGHT0,GL_SPECULAR,Specular);
-   glLightfv(GL_LIGHT0,GL_POSITION,Position);
-
-   if (mode == 0 || mode == 3) {
-      glEnable(GL_TEXTURE_2D);
-      glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_MODULATE);
-      glColor3f(1,1,1);
-      glBindTexture(GL_TEXTURE_2D, ground_texture);
-      glPushMatrix();
-      glScaled(40,0,40);
-      glBegin(GL_QUADS);
-      glNormal3f(0,1,0);
-      double ground_inc = 0.01;
-      double tex_mag;
-      if (mode == 0)
-         tex_mag = 6;
-      else
-         tex_mag = 30;
-      for (double i=-1;i<=1;i+=ground_inc){
-         for (double j=-1;j<=1;j+=ground_inc){
-            glTexCoord2f(-1+fmod(tex_mag*(i),2),-1+fmod(tex_mag*(j),2));glVertex3f(i,0,j);
-            glTexCoord2f(-1+fmod(tex_mag*(i+ground_inc),2),-1+fmod(tex_mag*(j),2));glVertex3f(i+ground_inc,0,j);
-            glTexCoord2f(-1+fmod(tex_mag*(i+ground_inc),2),-1+fmod(tex_mag*(j+ground_inc),2));glVertex3f(i+ground_inc,0,j+ground_inc);
-            glTexCoord2f(-1+fmod(tex_mag*(i),2),-1+fmod(tex_mag*(j+ground_inc),2));glVertex3f(i,0,j+ground_inc);
-         }
-      }
-      glEnd();
-      glDisable(GL_TEXTURE_2D);
-      glPopMatrix();
-
-      // rings of trees
-      for (int r = 20; r<40; r=r+1) {
-         for (int th=0;th<=360;th+=r)
-         {
-            tree1_simple(r*Cos(th+5*r), 0, r*Sin(th+5*r)+th/360., 41 + th, 0, 0.5+(r%5)/5.);
-         }
-      }
-      
-      // tree1_simple(9,0,0,30, 0, 1.5);
-      // tree1_simple(8,0,1,40, 0, 1);
-      // tree1_simple(7,0,3,50, 0, 0.8);
-      // tree1_simple(-1,0,1.5,60, 0, 0.6);
-      // tree1_simple(-3,0,0.5,70, 0, 1);
-      // tree1_simple(0,0,7,80, 0, 1.1);
-      // tree1_simple(0,0,-5,15, 0, 1);
-      // tree2(-1.9,0,3, 0, 0.9, 1);
-      // tree2(-3,0,4, 0, 1.3, 1);
-      // tree2(-3.1,0,-3, 0, 1.3, 1);
-      // tree2(-1.4,0,-4, 0, 0.9, 1);
-      glPushMatrix();
-      glRotatef(180, 0,1,0);
-      tree1(0,0,0,55, 0, 3);
-      glPopMatrix(); 
-      tree1(4,0,0,41, 0, 4);
-
-      update(); 
-      render_boids();
-      
-   }
-   else if (mode == 1) {
-      tree1_simple(0,0,0,30, 0, 1.5);
-   }
-   else if (mode == 2) {
-      tree2(0,0,0, 0, 0.9, 1);
-   }
-   
-   glDisable(GL_LIGHTING);
-   Sky(g_x,0, g_z, 50);
    glColor3f(1,1,1);
-   light_ball(Position[0],Position[1],Position[2] , 0.1);
-   
-   glWindowPos2i(5,5);
-   if (mode == 0) {
-      Print("overall scene view (use wasd + e + q to move light)");
-   }
-   else if (mode == 1) {
-      Print("first tree model (no light)");
-   }
-   else if (mode == 2) {
-      Print("second tree model (no light)");
-   }
-   else if (mode == 3) {
-      Print("ground inspection mode");
+   //  Draw axes
+   if (1)
+   {
+      const double len=1.5;  //  Length of axes
+      glBegin(GL_LINES);
+      glVertex3d(0.0,0.0,0.0);
+      glVertex3d(len,0.0,0.0);
+      glVertex3d(0.0,0.0,0.0);
+      glVertex3d(0.0,len,0.0);
+      glVertex3d(0.0,0.0,0.0);
+      glVertex3d(0.0,0.0,len);
+      glEnd();
+      //  Label axes
+      glRasterPos3d(len,0.0,0.0);
+      Print("X");
+      glRasterPos3d(0.0,len,0.0);
+      Print("Y");
+      glRasterPos3d(0.0,0.0,len);
+      Print("Z");
    }
 
+   
    //  Render the scene
    ErrCheck("display");
    glFlush();
@@ -1054,21 +976,8 @@ void special(int key,int x,int y)
    else if (key == GLUT_KEY_DOWN)
       ph -= 5;
    //  Keep angles to +/-360 degrees
-   //  Keep angles to +/-360 degrees
-   if (mode == 0 || mode == 1 || mode == 2)
-   {
-      th %= 360;
-      ph %= 360;
-   }
-   else {
-      th %= 360;
-      if (ph > 90) {
-         ph = 90;
-      }
-      else if (ph < -90) {
-         ph = -90;
-      }
-   }
+   th %= 360;
+   ph %= 360;
    //  Tell GLUT it is necessary to redisplay the scene
    glutPostRedisplay();
 }
@@ -1085,51 +994,19 @@ void key(unsigned char ch,int x,int y)
    else if (ch == '0')
       th = ph = 0;
    else if (ch == '9')
-      l_x = l_y = l_z = 0;
-   else if (ch == 'm')
-   {
-      mode = (mode + 1)%4;
-      th = ph = 0;
-      g_x = g_z = 0;
-      reshape(window_width, window_height);
-   }
-   if (mode == 3) {
-      if (ch == 'w')
-      {
-         g_x += 0.1*Cos(th);
-         g_z += 0.1*Sin(th);
-      }
-      else if (ch == 's')
-      {
-         g_x -= 0.1*Cos(th);
-         g_z -= 0.1*Sin(th);
-      }
-      else if (ch == 'a')
-      {
-         g_x += 0.1*Sin(th);
-         g_z -= 0.1*Cos(th);
-      }
-      else if (ch == 'd')
-      {
-         g_x -= 0.1*Sin(th);
-         g_z += 0.1*Cos(th);
-      } 
-   }
-   else {
-      if (ch == 'w')
-         l_x += 0.1;
-      else if (ch == 's')
-         l_x -= 0.1;
-      else if (ch == 'a')
-         l_z += 0.1;
-      else if (ch == 'd')
-         l_z -= 0.1;
-      else if (ch == 'q')
-         l_y += 0.1;
-      else if (ch == 'e')
-         l_y -= 0.1;
-   }
-   
+      g_x = g_y = g_z = 0;
+   else if (ch == 'r')
+      g_x += 0.1;
+   else if (ch == 'f')
+      g_x -= 0.1;
+   else if (ch == 'd')
+      g_z -= 0.1;
+   else if (ch == 'g')
+      g_z += 0.1;
+   else if (ch == 'o')
+      g_y += 0.1;
+   else if (ch == 'l')
+      g_y -= 0.1;
    //  Tell GLUT it is necessary to redisplay the scene
    glutPostRedisplay();
 }
@@ -1148,12 +1025,7 @@ void reshape(int width,int height)
    //  Orthogonal projection
    const double dim=10;
    double asp = (height>0) ? (double)width/height : 1;
-   if (mode == 3) {
-      gluPerspective(60, asp, 0.001, 100.0);
-   }
-   else {
-      glOrtho(-asp*dim,+asp*dim, -dim,+dim, -2*dim,+2*dim);
-   }
+   glOrtho(-asp*dim,+asp*dim, -dim,+dim, -2*dim,+2*dim);
    //  Switch to manipulating the model matrix
    glMatrixMode(GL_MODELVIEW);
    //  Undo previous transformations
@@ -1174,14 +1046,14 @@ void idle()
  */
 int main(int argc,char* argv[])
 {
-   init_boids();
    //  Initialize GLUT and process user parameters
+   init_boids();
    glutInit(&argc,argv);
    //  Request double buffered, true color window with Z buffering at 600x600
    glutInitWindowSize(600,600);
    glutInitDisplayMode(GLUT_RGB | GLUT_DEPTH | GLUT_DOUBLE);
    //  Create the window
-   glutCreateWindow("HW6: light and textures, Connor Davel");
+   glutCreateWindow("Objects");
 #ifdef USEGLEW
    //  Initialize GLEW
    if (glewInit()!=GLEW_OK) Fatal("Error initializing GLEW\n");
@@ -1197,10 +1069,6 @@ int main(int argc,char* argv[])
    //  Tell GLUT to call "key" when a key is pressed
    glutKeyboardFunc(key);
    //  Pass control to GLUT so it can interact with the user
-   wood_texture = LoadTexBMP("bark.bmp");
-   leaves_texture = LoadTexBMP("leaves.bmp");
-   ground_texture = LoadTexBMP("ground.bmp");
-   sky = LoadTexBMP("sky.bmp");
    glutMainLoop();
    return 0;
 }

@@ -1,4 +1,4 @@
-# HW2
+# HW6
 EXE=HW3
 
 # Main target
@@ -24,6 +24,14 @@ endif
 CLEAN=rm -f $(EXE) *.o *.a
 endif
 
+# Dependencies
+HW3.o: HW3.c CSCIx229.h
+loadtexbmp.o: loadtexbmp.c CSCIx229.h
+
+#  Create archive
+CSCIx229.a:loadtexbmp.o
+	ar -rcs $@ $^
+
 # Compile rules
 .c.o:
 	gcc -c $(CFLG)  $<
@@ -31,7 +39,7 @@ endif
 	g++ -c $(CFLG)  $<
 
 #  Link
-HW3:HW3.o  
+HW3:HW3.o	CSCIx229.a
 	gcc $(CFLG) -o $@ $^  $(LIBS)
 
 #  Clean
