@@ -1,12 +1,12 @@
 # HW6
-EXE=HW3
+EXE=project
 
 # Main target
 all: $(EXE)
 
 #  Msys/MinGW
 ifeq "$(OS)" "Windows_NT"
-CFLG=-O3 -Wall -fopenmp -DUSEGLEW
+CFLG=-O3 -Wall -DUSEGLEW
 LIBS=-lfreeglut -lglew32 -lglu32 -lopengl32 -lm
 CLEAN=rm -f *.exe *.o *.a
 else
@@ -25,11 +25,12 @@ CLEAN=rm -f $(EXE) *.o *.a
 endif
 
 # Dependencies
-HW3.o: HW3.c CSCIx229.h
+project3.o: project.c CSCIx229.h
+shader.o: shader.c CSCIx229.h
 loadtexbmp.o: loadtexbmp.c CSCIx229.h
 
 #  Create archive
-CSCIx229.a:loadtexbmp.o
+CSCIx229.a:loadtexbmp.o shader.o
 	ar -rcs $@ $^
 
 # Compile rules
@@ -39,7 +40,7 @@ CSCIx229.a:loadtexbmp.o
 	g++ -c $(CFLG)  $<
 
 #  Link
-HW3:HW3.o	CSCIx229.a
+project:project.o	CSCIx229.a
 	gcc $(CFLG) -o $@ $^  $(LIBS)
 
 #  Clean

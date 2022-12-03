@@ -51,6 +51,14 @@
 extern "C" {
 #endif
 
+//  Shader functions
+void CreateShader(int prog,const GLenum type,const char* file);
+void PrintProgramLog(int obj);
+int  CreateNoise3D(int unit);
+int  CreateShaderProg(const char* vert,const char* frag);
+int  CreateShaderProgAttr(char* VertFile,char* FragFile,char* Name[]);
+int  CreateShaderProgGeom(const char* vert,const char* geom,const char* frag);
+
 void Print(const char* format , ...);
 void Fatal(const char* format , ...);
 unsigned int LoadTexBMP(const char* file);

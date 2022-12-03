@@ -13,15 +13,20 @@ int ph=0;
 double l_x = 0;
 double l_y = 1;
 double l_z = 0;
-double g_x = 0;
+double g_x = -10;
 double g_z = 0;
 int window_width = 600;
 int window_height = 600;
+int shader; 
+int nw,ng,n;         //  Work group size and count
+unsigned int posbuf; //  Position buffer
+unsigned int velbuf; //  Velocity buffer
+unsigned int colbuf; //  Color buffer
 unsigned int wood_texture;
 unsigned int leaves_texture;
 unsigned int ground_texture;
 int sky; 
-#define N 50
+#define N 10000
 #define O 10
 
 int mode = 3;
@@ -714,55 +719,54 @@ void update() {
          total_vy += nvy;
          total_vz += nvz;
       }
-      if (total_neighbors == 0) {
-         continue; 
-      }
-      // fprintf(stdout, "(%f, %f, %f)",  total_x,total_y,total_z);
-      double dot_product;
+      if (total_neighbors != 0) {
+         // fprintf(stdout, "(%f, %f, %f)",  total_x,total_y,total_z);
+         double dot_product;
 
+         double avg_x = total_x;
+         double avg_y = total_y;
+         double avg_z = total_z;
+         double distance_norm = norm(avg_x, avg_y, avg_z); 
+         if (distance_norm > 0) {
+            avg_x = avg_x/distance_norm;
+            avg_y = avg_y/distance_norm;
+            avg_z = avg_z/distance_norm;
+            dot_product = dot(avg_x,avg_y,avg_z, cvx, cvy, cvz);
+            Fx += 0.1 * (avg_x - cvx*dot_product); 
+            Fy += 0.1 * (avg_y - cvy*dot_product); 
+            Fz += 0.1 * (avg_z - cvz*dot_product); 
+         }
 
-      double avg_x = total_x;
-      double avg_y = total_y;
-      double avg_z = total_z;
-      double distance_norm = norm(avg_x, avg_y, avg_z); 
-      if (distance_norm > 0) {
-         avg_x = avg_x/distance_norm;
-         avg_y = avg_y/distance_norm;
-         avg_z = avg_z/distance_norm;
-         dot_product = dot(avg_x,avg_y,avg_z, cvx, cvy, cvz);
-         Fx += 0.1 * (avg_x - cvx*dot_product); 
-         Fy += 0.1 * (avg_y - cvy*dot_product); 
-         Fz += 0.1 * (avg_z - cvz*dot_product); 
-      }
+         double avg_xa = total_xa;
+         double avg_ya = total_ya;
+         double avg_za = total_za;
+         double avoid_distance_norm = norm(avg_xa, avg_ya, avg_za); 
+         if (avoid_distance_norm > 0) {
+            avg_xa = avg_xa/avoid_distance_norm;
+            avg_ya = avg_ya/avoid_distance_norm;
+            avg_za = avg_za/avoid_distance_norm;
+            dot_product = dot(avg_xa,avg_ya,avg_za, cvx, cvy, cvz);
+            Fx -= 0.6 * (avg_xa - cvx*dot_product); 
+            Fy -= 0.6 * (avg_ya - cvy*dot_product); 
+            Fz -= 0.6 * (avg_za - cvz*dot_product); 
+         }
+         
 
-      double avg_xa = total_xa;
-      double avg_ya = total_ya;
-      double avg_za = total_za;
-      double avoid_distance_norm = norm(avg_xa, avg_ya, avg_za); 
-      if (avoid_distance_norm > 0) {
-         avg_xa = avg_xa/avoid_distance_norm;
-         avg_ya = avg_ya/avoid_distance_norm;
-         avg_za = avg_za/avoid_distance_norm;
-         dot_product = dot(avg_xa,avg_ya,avg_za, cvx, cvy, cvz);
-         Fx -= 0.6 * (avg_xa - cvx*dot_product); 
-         Fy -= 0.6 * (avg_ya - cvy*dot_product); 
-         Fz -= 0.6 * (avg_za - cvz*dot_product); 
+         double avg_vx = total_vx;
+         double avg_vy = total_vy;
+         double avg_vz = total_vz;
+         double velocity_norm = norm(avg_vx, avg_vy, avg_vz); 
+         if (velocity_norm > 0) {
+            avg_vx = avg_vx/velocity_norm;
+            avg_vy = avg_vy/velocity_norm;
+            avg_vz = avg_vz/velocity_norm;
+            dot_product = dot(avg_vx,avg_vy,avg_vz, cvx, cvy, cvz);
+            Fx += 0.1 * (avg_vx - cvx*dot_product); 
+            Fy += 0.1 * (avg_vy - cvy*dot_product); 
+            Fz += 0.1 * (avg_vz - cvz*dot_product); 
+         }
       }
       
-
-      double avg_vx = total_vx;
-      double avg_vy = total_vy;
-      double avg_vz = total_vz;
-      double velocity_norm = norm(avg_vx, avg_vy, avg_vz); 
-      if (velocity_norm > 0) {
-         avg_vx = avg_vx/velocity_norm;
-         avg_vy = avg_vy/velocity_norm;
-         avg_vz = avg_vz/velocity_norm;
-         dot_product = dot(avg_vx,avg_vy,avg_vz, cvx, cvy, cvz);
-         Fx += 0.1 * (avg_vx - cvx*dot_product); 
-         Fy += 0.1 * (avg_vy - cvy*dot_product); 
-         Fz += 0.1 * (avg_vz - cvz*dot_product); 
-      }
       // add basic object avoidance...
       for (int o=0; o<O; o++) {
          CollisionObject obj = collision_objects[o];
@@ -897,7 +901,7 @@ void display()
    glLoadIdentity();
    //  Set view angle
    if (mode == 3) {
-      gluLookAt(g_x,0.5,g_z, g_x+Cos(th),0.5+Sin(ph),g_z+Sin(th), 0,1,0);
+      gluLookAt(g_x,1,g_z, g_x+Cos(th),0.5+Sin(ph),g_z+Sin(th), 0,1,0);
    }
    else {
       glRotatef(ph,1,0,0);
@@ -905,30 +909,34 @@ void display()
    }
    
 
-   int ambient   =  3;
-   int diffuse   =  50;
+   int ambient   =  0;
+   int diffuse   =  10;
    int specular  =   0; 
    int local     =   0;
    float Position[4];
 
    //  Translate intensity to color vectors
-   float Ambient[]   = {0.01*ambient ,0.01*ambient ,0.01*ambient ,1.0};
-   float Diffuse[]   = {0.01*diffuse ,0.01*diffuse ,0.01*diffuse ,1.0};
-   float Specular[]  = {0.01*specular,0.01*specular,0.01*specular,1.0};
+   float Ambient[]   = {0.005*ambient ,0.005*ambient ,0.01*ambient ,1.0};
+   float Diffuse[]   = {0.005*diffuse ,0.005*diffuse ,0.01*diffuse ,1.0};
+   float Specular[]  = {0.005*specular,0.005*specular,0.01*specular,1.0};
    //  Light position
    if (mode == 3)
    {
-      Position[0] = g_x + Cos(th);
-      Position[1] = 0.4 + Sin(ph);
-      Position[2] = g_z + Sin(th);
-      Position[3] = 1.0;
+      // Position[0] = g_x + Cos(th);
+      // Position[1] = 0.4 + Sin(ph);
+      // Position[2] = g_z + Sin(th);
+      // Position[3] = 1.0;
+      Position[0] = 0;
+      Position[1] = 20;
+      Position[2] = 0;
+      Position[3] = 0;
    }
    else
    {
       Position[0] = l_x;
       Position[1] = l_y;
       Position[2] = l_z;
-      Position[3] = 1.0;
+      Position[3] = 1;
       //  Draw light position as ball (still no lighting here)
       
    }
@@ -999,9 +1007,6 @@ void display()
       tree1(0,0,0,55, 0, 3);
       glPopMatrix(); 
       tree1(4,0,0,41, 0, 4);
-
-      update(); 
-      render_boids();
       
    }
    else if (mode == 1) {
@@ -1012,9 +1017,13 @@ void display()
    }
    
    glDisable(GL_LIGHTING);
+   glDisable(GL_LIGHT0); 
+   glDisable(GL_COLOR_MATERIAL);
+   update(); 
+   render_boids();
    Sky(g_x,0, g_z, 50);
    glColor3f(1,1,1);
-   light_ball(Position[0],Position[1],Position[2] , 0.1);
+   // light_ball(Position[0],Position[1],Position[2] , 0.1);
    
    glWindowPos2i(5,5);
    if (mode == 0) {
@@ -1088,9 +1097,10 @@ void key(unsigned char ch,int x,int y)
       l_x = l_y = l_z = 0;
    else if (ch == 'm')
    {
-      mode = (mode + 1)%4;
+      // mode = (mode + 1)%4;
       th = ph = 0;
-      g_x = g_z = 0;
+      g_z = 0;
+      g_x = -10;
       reshape(window_width, window_height);
    }
    if (mode == 3) {

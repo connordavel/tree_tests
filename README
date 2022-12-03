@@ -1,4 +1,4 @@
-HW3: scene  
+project: fireflies
 
 Connor Davel
 CSCI4229 2022
@@ -6,24 +6,30 @@ CSCI4229 2022
 
 Demonstrates how to draw a scene
 
+running the program:
+>> make
+>> ./project
 
 Key bindings
   arrows     Change view angle
-  0          Reset view angle
-  9          Reset position
-  o/l        increase/decrease z position
-  r/f/d/g    change x and y view position
+  w/a/s/d    change x and y view position
   ESC        Exit
-Tree types:
-  There are 2 type of trees with various parameters that 
-  are copied, rotated, and generally changed throughout 
-  the scene. The rotation and size of the branches/leaves
-  is varied randomly as well as the size. 
+
 
 Sources:
 No outside sources used. All code is from in-class examples,
 especially example 8 for things like window resizing, drawing lines/axes,
 drawing a sphere, etc. 
 
+What still needs to be done:
+I am not happy with the night lighting, which needs a new sky box. I would like to add a 
+flash light or lantern that the fireflies will swarm around when turned on. I will also add a
+fence around the trees. I will also add better speed control so that the fireflies do not
+speed up on faster systems.
+
+I could not figure out how to implement a compute shader, so I have added that as a stretch
+goal if I get to it. But, by far the biggest bottleneck in fps are the 2 trees in the middle,
+which I am trying to make more efficient. 
+
 Time to Complete:
-about 6 hours
+about 50+ hours so far
