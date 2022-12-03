@@ -15,16 +15,16 @@ layout(local_size_variable) in;
 uniform vec3 xyz;
 uniform uint dim;
 //  Time step
-const float  dt = 0.05;
-const float sight_radius = 3;
-const float avoid_radius = 0.7; 
+const float  dt = 0.06;
+const float sight_radius = 0.7;
+const float avoid_radius = 0.3; 
 
 //  Compute shader
 void main()
 {
    //  Global Thread ID
    uint  gid = gl_GlobalInvocationID.x;
-   float size = col[gid].w + 0.00005;
+   float size = col[gid].w + 0.05;
    if (size >=1) {
       size = -size;
    }
@@ -65,7 +65,7 @@ void main()
    if (total_neighbors != 0) {
       if (length(total_attract) > 0) {
          total_attract = normalize(total_attract);
-         F += 0.1*total_attract - v0*dot(total_attract, v0);
+         F += 0.35*total_attract - v0*dot(total_attract, v0);
       }
       if (length(total_avoid) > 0) {
          total_avoid = normalize(total_avoid);
@@ -73,13 +73,31 @@ void main()
       }
       if (length(total_vel) > 0) {
          total_vel = normalize(total_vel);
-         F += 0.1*(total_vel - v0*dot(total_vel, v0));
+         F += 0.3*(total_vel - v0*dot(total_vel, v0));
       }
    }
+   // add boundnig box
+   float bounding_box[6] = {-10, 10, 5, 12, -10, 10};
+   if (p0.x < bounding_box[0]) {
+         F += vec3(1.0,0.0,0.0);
+      }
+      else if (p0.x > bounding_box[1]) {
+         F -= vec3(1.0,0.0,0.0);
+      }
+      if (p0.y < bounding_box[2]) {
+         F += vec3(0.0,1.0,0.0);
+      }
+      else if (p0.y > bounding_box[3]) {
+         F -= vec3(0.0,1.0,0.0);
+      }
+      if (p0.z < bounding_box[4]) {
+         F += vec3(0.0,0.0,1.0);
+      }
+      else if (p0.z > bounding_box[5]) {
+         F -= vec3(0.0,0.0,1.0);
+      }
 
    //  Compute new position and velocity
-   
-   // vec3 v = normalize(v0 + F*dt);
    vec3 v = v0 + F*dt; 
    if (length(v) > 1) { // set a speed limit 
       v = 1* normalize(v); 
@@ -90,17 +108,3 @@ void main()
    pos[gid].xyz = p;
    vel[gid].xyz = v;
 }
-
-
-   //  Test if inside sphere
-   // if (length(p-xyz) < dim)
-   // {
-   //    //  Compute Normal
-   //    vec3 N = normalize(p - xyz);
-   //    //  Compute reflected velocity with damping
-   //    v = 0.8*reflect(v0,N);
-   //    //  Set p0 on the sphere
-   //    p0 = xyz + dim*N;
-   //    //  Compute reflected position
-   //    p = p0 + v*dt + 0.5*dt*dt*G;
-   // }

@@ -586,15 +586,15 @@ void tree2(double x, double y, double z, int overall_rot, double r, double scale
  *     at (x,y,z)
  *     radius (r)
  */
-static void light_ball(double x,double y,double z,double r)
+static void light_ball(double x,double y,double z,double s, double r, double g, double b)
 {
    //  Save transformation
    glPushMatrix();
    //  Offset, scale and rotate
    glTranslated(x,y,z);
-   glScaled(r,r,r);
+   glScaled(s,s,s);
    //  Green Ball
-   glColor3f(0,1,0);
+   glColor3f(r,g,b);
    //  Bands of latitude
    int inc = 30;
    for (int ph=-90;ph<90;ph+=inc)
@@ -649,9 +649,9 @@ void init_boids() {
    glBindBuffer(GL_SHADER_STORAGE_BUFFER,posbuf);
    pos = (vec4*)glMapBufferRange(GL_SHADER_STORAGE_BUFFER,0,n*sizeof(vec4),GL_MAP_WRITE_BIT|GL_MAP_INVALIDATE_BUFFER_BIT);
    for (int i=0; i<n; i++){
-      pos[i].x = frand(-5,5);
-      pos[i].y = frand(10,20);
-      pos[i].z = frand(-5,+5);
+      pos[i].x = frand(-2,2);
+      pos[i].y = frand(4,6);
+      pos[i].z = frand(-2,+2);
       pos[i].w = 1;
    }
    glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
@@ -672,9 +672,9 @@ void init_boids() {
    col = (vec4*)glMapBufferRange(GL_SHADER_STORAGE_BUFFER,0,n*sizeof(vec4),GL_MAP_WRITE_BIT|GL_MAP_INVALIDATE_BUFFER_BIT);
    for (int i=0;i<n;i++)
    {
-      col[i].r = 0;
-      col[i].g = 1;
-      col[i].b = 0;
+      col[i].r = frand(-1,+1);
+      col[i].g = 1.0;
+      col[i].b = frand(-0.8,+0.8);
       col[i].a = frand(-1,1);
    }
    glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
@@ -716,7 +716,7 @@ void render_boids() {
    for (int i=0; i<n; i++){
       vec4 t = pos_data[i];
       vec4 s = size_data[i];
-      light_ball(t.x, t.y, t.z, 0.04*abs(s.w)); 
+      light_ball(t.x, t.y, t.z, 0.04*fabs(s.w), s.r, s.g, s.b); 
       
       // fence_post(x,y,z, 0.4); 
    }
